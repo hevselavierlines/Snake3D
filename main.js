@@ -26,7 +26,8 @@ const WALL_SETTINGS = {
 
 const TIMER_SETTINGS = {
   PENDULUM: 2000,
-  BOX: 1000
+  BOX: 1000,
+  DIAMOND: 500
 };
 
 var boxImpostor;
@@ -34,13 +35,19 @@ var pendulumImpostors;
 var objectIn = false;
 var boxTimer = 1000;
 var pendulumTimer = 2000;
-var testObj;
 var normalScale = 0.4;
 var curveScale = 0.6;
 var startLength = 50;
 var speed = 0.2;
 var moveSnake = true;
 var score = 0;
+var diamond;
+
+var playerCamera;
+var topCamera;
+
+var gui;
+var scoreText;
 
 // This begins the creation of a function that we will 'call' just after it's built
 
@@ -49,20 +56,21 @@ var createScene = function () {
   var scene = new BABYLON.Scene(engine);
   scene.enablePhysics();
   //Create a light
-  var light1 = new BABYLON.PointLight("PointLight1", new BABYLON.Vector3(0, 60, 0), scene);
-  light1.intensity = 1.0;
+  var light1 = new BABYLON.DirectionalLight("Dir0", new BABYLON.Vector3(0, -1, 0), scene);
+  light1.intensity = 2;
   light1.diffuse = new BABYLON.Color3(0.9, 0.9, 1.0);
 
   //Create an Arc Rotate Camera - aimed negative z this time
   //var arcCamera = new BABYLON.ArcRotateCamera("ArcRotateCamera", Math.PI / 2, 1.0, 110, BABYLON.Vector3.Zero(), scene);
-  var camera = new BABYLON.FollowCamera("FollowCam", new BABYLON.Vector3(0, 45, -100), scene);
-  camera.rotationOffset = 180;
-  camera.radius = 30; // how far from the object to follow
-  camera.heightOffset = 15; // how high above the object to place the camera
-  camera.cameraAcceleration = 0.05; // how fast to move
-  camera.maxCameraSpeed = 20; // speed limit
-  scene.activeCamera = camera;
-  scene.activeCamera.attachControl(canvas, true);
+  playerCamera = new BABYLON.FollowCamera("FollowCam", new BABYLON.Vector3(0, 45, -100), scene);
+  playerCamera.rotationOffset = 180;
+  playerCamera.radius = 30; // how far from the object to follow
+  playerCamera.heightOffset = 15; // how high above the object to place the camera
+  playerCamera.cameraAcceleration = 0.05; // how fast to move
+  playerCamera.maxCameraSpeed = 20; // speed limit
+  scene.activeCamera = playerCamera;
+
+  topCamera = new BABYLON.ArcRotateCamera("ArcRotateCamera", -1.57, 0, 100, new BABYLON.Vector3(0, 0, 0), scene);
 
   snake.head = BABYLON.Mesh.CreateSphere("head", 10, 3);
   snake.head.position.x = 0;
@@ -91,28 +99,12 @@ var createScene = function () {
   wallMaterial2.diffuseTexture = new BABYLON.Texture("textures/holzboden-nahtlos.png", scene);
   wallMaterial2.diffuseTexture.uScale = 1.0;//Repeat 5 times on the Vertical Axes
   wallMaterial2.diffuseTexture.vScale = 10.0;
-  /*for(var i = 0; i < startLength; i++) {
-    bodyElement = BABYLON.Mesh.CreateCylinder("snakeElem" + i, 1, 3, 3, 16, 1, scene, false);
-    bodyElement.scaling.y = normalScale;
-    bodyElement.scaling.x = 0.8;
-    bodyElement.scaling.z = 0.8;
-
-    bodyElement.position.y = 0.8;
-
-    bodyElement.rotation.x = 1.57;
-    bodyElement.rotation.y = 0;
-
-    bodyElement.direction = 0;
-    bodyElement.material = snake.materials[i % 10];
-    snake.body.push(bodyElement);
-    snake.bodyLength++;
-  }*/
 
   snake.head.material = materialSnake;
 
   var northWall = BABYLON.MeshBuilder.CreateBox("northWall", WALL_SETTINGS.thickness, scene);
   northWall.position.x = 0;
-  northWall.position.y = WALL_SETTINGS.height / 2 - 1;
+  northWall.position.y = WALL_SETTINGS.height / 2 - 0.5;
   northWall.position.z = 40;
   northWall.scaling.x = 80;
   northWall.scaling.y = WALL_SETTINGS.height;
@@ -121,7 +113,7 @@ var createScene = function () {
 
   var southWall = BABYLON.MeshBuilder.CreateBox("southWall", WALL_SETTINGS.thickness, scene);
   southWall.position.x = 0;
-  southWall.position.y = WALL_SETTINGS.height / 2 - 1;
+  southWall.position.y = WALL_SETTINGS.height / 2 - 0.5;
   southWall.position.z = -40;
   southWall.scaling.x = 80;
   southWall.scaling.y = WALL_SETTINGS.height;
@@ -129,7 +121,7 @@ var createScene = function () {
   southWall.material = wallMaterial1;
 
   var westWall = BABYLON.MeshBuilder.CreateBox("westWall", WALL_SETTINGS.thickness, scene);
-  westWall.position.y = WALL_SETTINGS.height / 2 - 1;
+  westWall.position.y = WALL_SETTINGS.height / 2 - 0.5;
   westWall.position.x = -40;
   westWall.scaling.z = 80;
   westWall.scaling.y = WALL_SETTINGS.height;
@@ -137,7 +129,7 @@ var createScene = function () {
   westWall.material = wallMaterial2;
 
   var eastWall = BABYLON.MeshBuilder.CreateBox("eastWall", WALL_SETTINGS.thickness, scene);
-  eastWall.position.y = WALL_SETTINGS.height / 2 - 1;
+  eastWall.position.y = WALL_SETTINGS.height / 2 - 0.5;
   eastWall.position.x = 40;
   eastWall.scaling.z = 80;
   eastWall.scaling.y = WALL_SETTINGS.height;
@@ -147,8 +139,7 @@ var createScene = function () {
   nextX = 0;
   nextZ = 0;
 
-  camera.lockedTarget = snake.head;
-
+  playerCamera.lockedTarget = snake.head;
 
   var coinCollect = BABYLON.Mesh.CreateCylinder("boxCollect", 1, 4, 4, 20, 1, scene);
   coinCollect.position.y = 50;
@@ -163,6 +154,48 @@ var createScene = function () {
   pendSwing.position.y = 2;
   pendSwing.position.z = 10;
   collectables.push(pendSwing);
+
+  var loader = new BABYLON.AssetsManager(scene);
+  var diamondLoader = loader.addMeshTask("diamond", "", "models/", "diamond.obj");
+  diamondLoader.onSuccess = function(meshes) {
+    diamond = meshes.loadedMeshes[0];
+    diamond.scaling.x = 2;
+    diamond.scaling.y = 2;
+    diamond.scaling.z = 2;
+    diamond.position.y = 2;
+    diamond.position.z = -10;
+    diamond.rotation.x = 1.57;
+    diamond.rotation.z = 1.57;
+
+    var diamondMaterial = new BABYLON.StandardMaterial("diamondMaterial", scene);
+    diamondMaterial.diffuseTexture = new BABYLON.Texture("textures/diamant.png");
+    diamond.material = diamondMaterial;
+
+    var diamondTop = BABYLON.Mesh.CreateBox("diamondTop", 3, scene);
+    diamondTop.position.y = 20;
+    diamondTop.position.z = -10;
+    collectables.push(diamondTop);
+
+    collectables.push(diamond);
+  };
+
+  var snakeHeadLoader = loader.addMeshTask("snakehead", "", "models/", "snakeHead.obj");
+  snakeHeadLoader.onSuccess = function(meshes) {
+    snake.head.dispose();
+    snake.head = meshes.loadedMeshes[0];
+    var snakeHeadScaling = 1.5;
+    snake.head.scaling.x = snakeHeadScaling;
+    snake.head.scaling.y = snakeHeadScaling;
+    snake.head.scaling.z = snakeHeadScaling;
+    snake.head.position.y = snakeHeadScaling / 2;
+    var snakeHeadMaterial = new BABYLON.StandardMaterial("snakeMaterial", scene);
+    snakeHeadMaterial.diffuseTexture = new BABYLON.Texture("textures/schlange.jpg");
+    snake.head.material = snakeHeadMaterial;
+    playerCamera.lockedTarget = snake.head;
+  };
+
+  loader.load();
+
 
   var coinMaterial = new BABYLON.StandardMaterial("coinMaterial", scene);
   coinMaterial.diffuseTexture = new BABYLON.Texture("textures/tuxcoin.png");
@@ -187,10 +220,31 @@ var createScene = function () {
     scene);
 
   var materialPlane = new BABYLON.StandardMaterial("texturePlane", scene);
-  materialPlane.diffuseColor = new BABYLON.Color3(0,1.0,0.5);
+  materialPlane.diffuseTexture = new BABYLON.Texture("textures/grass.png", scene);
+  /*BABYLON.VideoTexture.CreateFromWebCam(scene, function(videoTexture) {
+    materialPlane.diffuseTexture = videoTexture;
+  }, { maxWidth: 256, maxHeight: 256 });*/
+  materialPlane.bumpTexture = new BABYLON.Texture("textures/grassbump.png", scene);
+  materialPlane.invertNormalMapX = true;
+  materialPlane.invertNormalMapY = true;
+  materialPlane.emissiveColor = new BABYLON.Color3(197/255, 228/255, 93/255);
+  materialPlane.diffuseTexture.uScale = 20.0;
+  materialPlane.diffuseTexture.vScale = 20.0;
 
   plane.material = materialPlane;
   //snake.body[0].material = materialBox;
+
+  gui = BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI");
+
+  scoreText = new BABYLON.GUI.TextBlock();
+  scoreText.text = "Score: 0";
+  scoreText.color = "white";
+  scoreText.fontSize = 32;
+  scoreText.left = "20px";
+  scoreText.top = "10px";
+  scoreText.textHorizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
+  scoreText.textVerticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_TOP;
+  gui.addControl(scoreText);
 
   return scene;
 };
@@ -256,6 +310,12 @@ scene.actionManager.registerAction(new BABYLON.ExecuteCodeAction(BABYLON.ActionM
     }
   } else if(evt.sourceEvent.key == " ") {
     running = !running;
+  } else if(evt.sourceEvent.key == "v") {
+    if(scene.activeCamera == playerCamera) {
+      scene.activeCamera = topCamera;
+    } else {
+      scene.activeCamera = playerCamera;
+    }
   }
 }));
 
@@ -405,26 +465,34 @@ engine.runRenderLoop(function () {
     function caughtElement(element) {
       if(element == collectables[0]) {
         increaseSize(5);
+        score += boxTimer;
         shootBox();
       } else if(element == collectables[2]) {
         increaseSize(20);
+        score += Math.round(pendulumImpostors[1].getLinearVelocity().length() * 200);
         swingPendulum();
       }
+      updateScore();
     }
 
     function shootBox() {
       var extraBox = collectables[0];
       extraBox.position.y = 30;
-      extraBox.position.x = Math.random() * 70 - 35;
-      extraBox.position.z = Math.random() * 70 - 35;
+      extraBox.position.x = Math.random() * 66 - 33;
+      extraBox.position.z = Math.random() * 66 - 33;
       console.log("shootBox (" + extraBox.position.x + ", " + extraBox.position.z + ")");
       boxImpostor.applyImpulse(new BABYLON.Vector3(Math.random() * 2 - 1, 0, Math.random() * 2 - 1), extraBox.getAbsolutePosition());
       boxTimer = TIMER_SETTINGS.BOX;
     }
 
+    function updateScore() {
+      console.log(score);
+      scoreText.text = "Score: " + score;
+    }
+
     function swingPendulum() {
       var zPos = Math.random() * 70 - 35;
-      var xPos = Math.random() * 30 - 15;
+      var xPos = Math.random() * 70 - 35;
       var power = Math.random() * 20 + 10;
 
       collectables[1].position.x = xPos;
